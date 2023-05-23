@@ -14,6 +14,12 @@ from functools import partial
 from matplotlib.backend_bases import MouseButton
 import csv
 
+
+class CEgoMotion:
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+
 class Cboundary:
     def __init__(self, c0, c1, c2, c3, startX, endX):
         self.c0 = c0
@@ -88,7 +94,6 @@ def draws():
     set_axs_properties(axs)
     plt.show()
 
-    
 def draw_boundary(frame, boundaries, count, axs):
     print(frame, "framenumber")
     lines = []
@@ -115,36 +120,58 @@ def anim_history(store_num):
     fig, partial(draw_boundary, boundaries=bnds,count=store_num, axs=axs), interval=1000, blit=True, save_count=50)
     plt.show()
 
+def transform(boundary_orig):
+    return boundary_orig
+
 class callback_manager:
-    def __init__(self, fig, ax, boundary_list, base_image_count):
+    def __init__(self, fig, ax, data_list, history_cache_number=3):
         self.fig = fig
         self.ax = ax
-        self.boundary_list = boundary_list
-        self.index = 0
-        self.clear = False
-        self.base_image_count = base_image_count
+        self.data_list = data_list
+        self.index_position = -1
+        self.history_cache_number = history_cache_number
+        self.history_cache = []
         
+    def clear_all_history(self):
+        for history_line in self.history_cache:
+            history_line.remove()
+        self.history_cache = []
+
     def on_press(self, event):
         print('press', event.key)
-        list_len = len(self.boundary_list)
+        list_len = len(self.data_list)
         if not list_len or (event.key == 'left' and event.key == 'right'):
             return
         if event.key == 'left':
-            self.index = self.index - 1
+            self.index_position = self.index_position - 1
         elif event.key == 'right':
-            self.index = self.index + 1
+            self.index_position = self.index_position + 1
         elif event.key == 'r':
             plt.cla()
             print('clear fig!')
-            self.clear = True
-            return
-        self.index = min(list_len - 1, max(0, self.index))
-        print(self.index, 'index')
-        if self.clear:
+            # for item in self.exist_history:
+            #     item.remove()
+            #     print('Removed!')
             set_axs_properties(self.ax)
-            self.clear = False
-        self.boundary_list[self.index].draw_polynomial(self.ax, boundarycolor=(1.,0.,0.,1.0))
-        self.ax.set_title(self.index * 3 + self.base_image_count)
+            return
+        self.index_position = min(list_len - 1, max(0, self.index_position))
+        print(self.index_position, 'index')
+
+        # if self.exist_history is not None:
+        #     self.exist_history.remove()
+        self.clear_all_history()
+
+        for index in list(range(self.history_cache_number)):
+            index_cropped = min(list_len - 1, max(0, self.index_position - index))
+            data = self.data_list[index_cropped]
+            boundary = data[1]
+            boundary = transform(boundary)
+            line_drawed = boundary.draw_polynomial(self.ax, boundarycolor=(1.,0.,0.,1.0 / (2*index_cropped+1)))
+            self.history_cache.append(line_drawed)
+
+        current_index = min(list_len - 1, max(0, self.index_position))
+        image_number = self.data_list[current_index][0]
+        self.ax.set_title(image_number)
         event.canvas.draw()
 
         # if event.key == 'x':
@@ -154,13 +181,15 @@ class callback_manager:
         
 def function_keypress():
     fig, ax = plt.subplots(figsize=(20, 5), layout='constrained')
+    data_list = parse_csv('test.csv')
+
     bnds = [Cboundary(-1.761356, -0.004106, -0.000393, -0.000012, 0, 52.81),
             Cboundary(-2.779935, -0.000795, -0.000415, -0.000012, 0, 40.83),
             Cboundary(-3.787721, -0.005490, -0.000436, -0.000012, 0, 30.64)
             ]
     
     set_axs_properties(ax)
-    callback_obj = callback_manager(fig, ax, bnds, 32) 
+    callback_obj = callback_manager(fig, ax, data_list) 
 
     fig.canvas.mpl_connect('key_press_event', callback_obj.on_press)
     # np.random.seed(19680801)
@@ -193,19 +222,29 @@ def draw_comparing_polynomial_adapting():
     
 def parse_csv(file_path):
     # TODO
+    data_list = []
     with open(file_path, newline='') as csvfile:
         spamreader = csv.reader(csvfile, delimiter=' ', quotechar='|')
         for row in spamreader:
-            print(', '.join(row))
-    return
-if __name__ == '__main__':
+            row_parsed = row[0]
+            row_split = row_parsed.split(',')
+            row_split_converted = [float(item) for item in row_split]
+            data_list.append([int(row_split_converted[0]), Cboundary(row_split_converted[1],row_split_converted[2], row_split_converted[3],row_split_converted[4],row_split_converted[5],row_split_converted[6]),
+                              CEgoMotion(row_split_converted[7], row_split_converted[8])])
+            # print(row)
+
+    return data_list
+
+def radom_sample():
     np.random.seed(19680801)  # seed the random number generator.
     data = {'a': np.arange(50),
             'c': np.random.randint(0, 50, 50),
             'd': np.random.randn(50)}
     data['b'] = data['a'] + 10 * np.random.randn(50)
     data['d'] = np.abs(data['d']) * 100
-    
+
+def display_sample():
+    ##### test0
     # x = np.linspace(0, 2, 100)  # Sample data.
     # z = np.linspace(0, 1.5, 100)  # Sample data.
 
@@ -218,8 +257,14 @@ if __name__ == '__main__':
     # ax.set_ylabel('y label')  # Add a y-label to the axes.
     # ax.set_title("Simple Plot")  # Add a title to the axes.
     # ax.legend();  # Add a legend.
-    #draws()
-    # anim_history(3)
-    # function_keypress()
-    draw_comparing_polynomial_adapting()
+    ##### test0
+    
+    # draws() # test1
+    # anim_history(3) # test2
+    function_keypress() # test3
+    
+if __name__ == '__main__':
+    display_sample()
+    # data_list = parse_csv('test.csv')
+    # draw_comparing_polynomial_adapting()
     print("#test")
