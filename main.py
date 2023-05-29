@@ -30,7 +30,7 @@ class Cboundary:
         self.endX = endX
         
     def calculateY_list(self, x):
-        y_list = [self.c0  + self.c1 * _x + 1.0/2.0*self.c2 * math.pow(_x, 2) + 1.0/6.0*self.c3 * math.pow(_x, 3) for _x in x]
+        y_list = np.array([self.c0  + self.c1 * _x + 1.0/2.0*self.c2 * math.pow(_x, 2) + 1.0/6.0*self.c3 * math.pow(_x, 3) for _x in x])
         return y_list
     
     def draw_polynomial(self, ax, boundarycolor='orange', linewidth=1):
@@ -129,16 +129,73 @@ def ref_function(x):
     y = 1 / (1 + scale * math.exp(-1 * (x - shift_position)))
     return y
 
+def linspace(start, end, space):
+    return np.linspace(start, end, int((end - start) / space + 1))
+
 def merge_polynomial(former_boundary, later_boundary, ref_function):
-    x_list = np.linspace(0, 60, 25)
-    count = len(x_list)
-    coeff = [ref_function(x) for x in x_list]
-    former_latitude = former_boundary.calculateY_list(x_list)
-    later_latitude = later_boundary.calculateY_list(x_list)
-    merge_latitude = [(1-coeff[index])*former_latitude[index] + coeff[index]*later_latitude[index] for index in list(range(count))]
-    polynomial_function = np.polyfit(x_list, merge_latitude, 3)
-    polynomial3 = np.poly1d(polynomial_function)
-    boundary_merged = Cboundary(polynomial_function[3], polynomial_function[2],polynomial_function[1],polynomial_function[0], 0, 60)
+
+    common_start = max(former_boundary.startX, later_boundary.startX)
+    common_end = min(former_boundary.endX, later_boundary.endX)
+    if common_end < common_start + 3:
+        return later_boundary
+    min_start = min(former_boundary.startX, later_boundary.startX)
+
+    end = later_boundary.endX
+    space = 2.5
+    if common_start - min_start > 3*space:
+        prefix_x = linspace(min_start, common_start - space, space)
+    else:
+        prefix_x = np.array([])
+    common_x = linspace(common_start, common_end, space)
+    if end - common_end > 3*space:
+        suffix_x = linspace(common_end + space, end, space)
+    else:
+        suffix_x = np.array([])
+    # x_list = np.concatenate((prefix_x, common_x, suffix_x), axis=0)
+
+    common_x_count = len(common_x)
+    former_common_latitude = former_boundary.calculateY_list(common_x)
+    later_common_latitude = later_boundary.calculateY_list(common_x)
+    coeff_common = [ref_function(x) for x in common_x]
+    merge_common_latitude = np.array([(1-coeff_common[index])*former_common_latitude[index] + coeff_common[index]*later_common_latitude[index] for index in list(range(common_x_count))])
+    
+    prefix_x_count = len(prefix_x)
+    former_prefix_latitude = former_boundary.calculateY_list(prefix_x)
+    later_prefix_latitude = later_boundary.calculateY_list(prefix_x)
+    if former_common_latitude.size > 0:
+        if later_boundary.startX > former_boundary.startX:
+            common_start_shift = coeff_common[0]*(later_common_latitude[0] - former_common_latitude[0])
+            merge_prefix_latitude = [former_prefix_latitude[index]+common_start_shift for index in list(range(prefix_x_count))]
+            merge_prefix_latitude = np.array(merge_prefix_latitude)
+        else:
+            common_start_shift = (1-coeff_common[0])*(former_common_latitude[0] - later_common_latitude[0])
+            merge_prefix_latitude = [later_prefix_latitude[index]+common_start_shift for index in list(range(prefix_x_count))]
+            merge_prefix_latitude = np.array(merge_prefix_latitude)
+    else:
+        merge_prefix_latitude = np.array([])
+
+    merge_suffix_latitude = later_boundary.calculateY_list(suffix_x)
+    merge_latitude = np.concatenate((merge_prefix_latitude,merge_common_latitude))
+    merge_latitude = np.concatenate((merge_latitude, merge_suffix_latitude))
+    merge_longitude = np.concatenate((np.concatenate((prefix_x, common_x)), suffix_x))
+    polynomial_function = np.polyfit(merge_longitude, merge_latitude, 3)
+    # polynomial3 = np.poly1d(polynomial_function)
+
+    if prefix_x.size > 0:
+        start_x = prefix_x[0]
+    elif common_x.size > 0:
+        start_x = common_x[0]
+    elif suffix_x.size > 0:
+        start_x = suffix_x[0]
+
+    if suffix_x.size > 0:
+        end_x = suffix_x[-1]
+    elif common_x.size > 0:
+        end_x = common_x[-1]
+    elif prefix_x.size > 0:
+        end_x = prefix_x[-1]
+
+    boundary_merged = Cboundary(polynomial_function[3], polynomial_function[2],polynomial_function[1],polynomial_function[0], start_x, end_x)
     print('Fitting polynomial function coefficient(x^3, x^2, x^1, x^0): ', polynomial_function)
     return boundary_merged
 
@@ -200,9 +257,15 @@ class callback_manager:
             boundary = transform(boundary)
             index_former_cropped = min(list_len - 1, max(0, self.index_position - index - 1))
             if index_former_cropped < index_cropped:
-                data_former = self.data_list[index_former_cropped]
-                boundary_former = data_former[1]
-                boundary_former = transform(boundary_former)
+                boundary_former = self.data_list[index_former_cropped][1]
+                index_former_former_cropped = min(list_len - 1, max(0, self.index_position - index - 2))
+                if index_former_former_cropped < index_former_cropped:
+                    boundary_former_former = self.data_list[index_former_former_cropped][1]
+                    boundary_former_former = transform(boundary_former_former)
+                    boundary_former_merged = merge_polynomial(boundary_former_former, boundary, ref_function)
+                    boundary_former = boundary_former_merged
+                else:
+                    boundary_former = transform(boundary_former)
                 boundary_merged = merge_polynomial(boundary_former, boundary, ref_function)
                 line_drawed_merged = boundary_merged.draw_polynomial(self.ax, boundarycolor=(0.,0.,1.,1.0 / (2*index+1)))
                 self.merged_cache.append(line_drawed_merged)
@@ -241,7 +304,7 @@ def draw_polynomial_adapting(x_list, y_list, ax, boundarycolor='orange', linewid
     y_list_polyfit_shifted = [y + 0.05 for y in y_list_polyfit]
     line, = ax.plot(x_list, y_list_polyfit_shifted, color=boundarycolor, linewidth=linewidth);  # Plot some data on the axes.
     return line      
-  
+
 def draw_comparing_polynomial_adapting():
     # draw two cases for comparsion
     fig, axs = plt.subplots(figsize=(20, 5), layout='constrained')  # a figure with a 2x2 grid of Axes
