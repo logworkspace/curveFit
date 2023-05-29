@@ -124,7 +124,7 @@ def transform(boundary_orig):
     return boundary_orig
 
 def ref_function(x, shift_position = 20, scale = 0.1):
-    y = 1 / (1 + scale * math.exp(-1 * (x - shift_position)))
+    y = 1 / (1 +  math.exp(-1 * scale * (x - shift_position)))
     return y
 
 def linspace(start, end, space):
