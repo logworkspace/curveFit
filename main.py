@@ -123,9 +123,7 @@ def anim_history(store_num):
 def transform(boundary_orig):
     return boundary_orig
 
-def ref_function(x):
-    shift_position = 20
-    scale = 0.1
+def ref_function(x, shift_position = 20, scale = 0.1):
     y = 1 / (1 + scale * math.exp(-1 * (x - shift_position)))
     return y
 
@@ -137,7 +135,7 @@ def merge_polynomial(former_boundary, later_boundary, ref_function):
     common_start = max(former_boundary.startX, later_boundary.startX)
     common_end = min(former_boundary.endX, later_boundary.endX)
     if common_end < common_start + 3:
-        return later_boundary
+        return later_boundary, ()
     min_start = min(former_boundary.startX, later_boundary.startX)
 
     end = later_boundary.endX
@@ -156,7 +154,7 @@ def merge_polynomial(former_boundary, later_boundary, ref_function):
     common_x_count = len(common_x)
     former_common_latitude = former_boundary.calculateY_list(common_x)
     later_common_latitude = later_boundary.calculateY_list(common_x)
-    coeff_common = [ref_function(x) for x in common_x]
+    coeff_common = [ref_function(x, end*0.5, (common_end-common_start)*0.5*0.0006) for x in common_x]
     merge_common_latitude = np.array([(1-coeff_common[index])*former_common_latitude[index] + coeff_common[index]*later_common_latitude[index] for index in list(range(common_x_count))])
     
     prefix_x_count = len(prefix_x)
@@ -195,12 +193,12 @@ def merge_polynomial(former_boundary, later_boundary, ref_function):
     elif prefix_x.size > 0:
         end_x = prefix_x[-1]
 
-    boundary_merged = Cboundary(polynomial_function[3], polynomial_function[2],polynomial_function[1],polynomial_function[0], start_x, end_x)
+    boundary_merged = Cboundary(polynomial_function[3], polynomial_function[2],2*polynomial_function[1],6*polynomial_function[0], start_x, end_x)
     print('Fitting polynomial function coefficient(x^3, x^2, x^1, x^0): ', polynomial_function)
     return boundary_merged, (merge_longitude, merge_latitude)
 
 class callback_manager:
-    def __init__(self, fig, ax, data_list, history_cache_number=3):
+    def __init__(self, fig, ax, data_list, history_cache_number=2):
         self.fig = fig
         self.ax = ax
         self.data_list = data_list
@@ -218,7 +216,7 @@ class callback_manager:
             if index == 0:
                 self.merged_list.append((boundary,()))
                 continue
-            boundary_former = self.data_list[index-1][1]
+            boundary_former = self.merged_list[-1][0]
             boundary_former = transform(boundary_former)
             merged = merge_polynomial(boundary_former, boundary, ref_function)
             self.merged_list.append(merged)
@@ -265,18 +263,18 @@ class callback_manager:
             data = self.data_list[index_cropped]
             boundary = data[1]
             boundary = transform(boundary)
-            line_drawed = boundary.draw_polynomial(self.ax, boundarycolor=(1.,0.,0.,1.0 / (2*index+1)))
+            line_drawed = boundary.draw_polynomial(self.ax, boundarycolor=(1.,0.,0.,1.0 / (2*index+1)), linewidth = max(1, 2-index))
             self.history_cache.append(line_drawed)
             merged_data = self.merged_list[index_cropped]
             boundary_merged = merged_data[0]
-            line_drawed_merged = boundary_merged.draw_polynomial(self.ax, boundarycolor=(0.,0.,1.,1.0 / (2*index+1)))
+            line_drawed_merged = boundary_merged.draw_polynomial(self.ax, boundarycolor=(0.,0.,1.,1.0 / (2*index+1)), linewidth = max(1, 2-index))
             self.merged_cache.append(line_drawed_merged)
             merged_points = merged_data[1]
             if merged_points != ():
                 points_drawing = self.ax.scatter(merged_points[0], merged_points[1], s=30 - 9*index)
                 self.merged_points_list.append(points_drawing)
 
-            
+
 
         # for index in list(range(self.history_cache_number)):
         #     index_cropped = min(list_len - 1, max(0, self.index_position - index))
