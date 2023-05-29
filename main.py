@@ -112,7 +112,7 @@ def anim_history(store_num):
             Cboundary(-2.779935, -0.000795, -0.000415, -0.000012, 0, 40.83),
             Cboundary(-3.787721, -0.005490, -0.000436, -0.000012, 0, 30.64),
             Cboundary(-4.779935, -0.009795, -0.000415, -0.000012, 0, 40.83),
-            Cboundary(-5.787721, -0.006490, -0.000436, -0.000012, 0, 30.64),
+            Cboundary(-5.787721, -0.006490, -0.000436, -0.000012, 0, 30.64)
             ]
 
     set_axs_properties(axs)
@@ -197,7 +197,7 @@ def merge_polynomial(former_boundary, later_boundary, ref_function):
 
     boundary_merged = Cboundary(polynomial_function[3], polynomial_function[2],polynomial_function[1],polynomial_function[0], start_x, end_x)
     print('Fitting polynomial function coefficient(x^3, x^2, x^1, x^0): ', polynomial_function)
-    return boundary_merged
+    return boundary_merged, (merge_longitude, merge_latitude)
 
 class callback_manager:
     def __init__(self, fig, ax, data_list, history_cache_number=3):
@@ -208,7 +208,21 @@ class callback_manager:
         self.history_cache_number = history_cache_number
         self.history_cache = []
         self.merged_cache = []
-        
+        self.merged_points_list = []
+        self.merged_list = []
+        data_count = len(self.data_list)
+        for index in list(range(data_count)):
+            data = self.data_list[index]
+            boundary = data[1]
+            boundary = transform(boundary)
+            if index == 0:
+                self.merged_list.append((boundary,()))
+                continue
+            boundary_former = self.data_list[index-1][1]
+            boundary_former = transform(boundary_former)
+            merged = merge_polynomial(boundary_former, boundary, ref_function)
+            self.merged_list.append(merged)
+
     def clear_all_history(self):
         for history_line in self.history_cache:
             history_line.remove()
@@ -217,6 +231,10 @@ class callback_manager:
         for history_line in self.merged_cache:
             history_line.remove()
         self.merged_cache = []
+
+        for history_points in self.merged_points_list:
+            history_points.remove()
+        self.merged_points_list = []
 
     def on_press(self, event):
         print('press', event.key)
@@ -242,33 +260,45 @@ class callback_manager:
         #     self.exist_history.remove()
         self.clear_all_history()
 
-        # for index in list(range(self.history_cache_number)):
-        #     index_cropped = min(list_len - 1, max(0, self.index_position - index))
-        #     data = self.data_list[index_cropped]
-        #     boundary = data[1]
-        #     boundary = transform(boundary)
-        #     line_drawed = boundary.draw_polynomial(self.ax, boundarycolor=(1.,0.,0.,1.0 / (2*index+1)))
-        #     self.history_cache.append(line_drawed)
-
         for index in list(range(self.history_cache_number)):
             index_cropped = min(list_len - 1, max(0, self.index_position - index))
             data = self.data_list[index_cropped]
             boundary = data[1]
             boundary = transform(boundary)
-            index_former_cropped = min(list_len - 1, max(0, self.index_position - index - 1))
-            if index_former_cropped < index_cropped:
-                boundary_former = self.data_list[index_former_cropped][1]
-                index_former_former_cropped = min(list_len - 1, max(0, self.index_position - index - 2))
-                if index_former_former_cropped < index_former_cropped:
-                    boundary_former_former = self.data_list[index_former_former_cropped][1]
-                    boundary_former_former = transform(boundary_former_former)
-                    boundary_former_merged = merge_polynomial(boundary_former_former, boundary, ref_function)
-                    boundary_former = boundary_former_merged
-                else:
-                    boundary_former = transform(boundary_former)
-                boundary_merged = merge_polynomial(boundary_former, boundary, ref_function)
-                line_drawed_merged = boundary_merged.draw_polynomial(self.ax, boundarycolor=(0.,0.,1.,1.0 / (2*index+1)))
-                self.merged_cache.append(line_drawed_merged)
+            line_drawed = boundary.draw_polynomial(self.ax, boundarycolor=(1.,0.,0.,1.0 / (2*index+1)))
+            self.history_cache.append(line_drawed)
+            merged_data = self.merged_list[index_cropped]
+            boundary_merged = merged_data[0]
+            line_drawed_merged = boundary_merged.draw_polynomial(self.ax, boundarycolor=(0.,0.,1.,1.0 / (2*index+1)))
+            self.merged_cache.append(line_drawed_merged)
+            merged_points = merged_data[1]
+            if merged_points != ():
+                points_drawing = self.ax.scatter(merged_points[0], merged_points[1], s=30 - 9*index)
+                self.merged_points_list.append(points_drawing)
+
+            
+
+        # for index in list(range(self.history_cache_number)):
+        #     index_cropped = min(list_len - 1, max(0, self.index_position - index))
+        #     data = self.data_list[index_cropped]
+        #     boundary = data[1]
+        #     boundary = transform(boundary)
+        #     index_former_cropped = min(list_len - 1, max(0, self.index_position - index - 1))
+        #     if index_former_cropped < index_cropped:
+        #         boundary_former = self.data_list[index_former_cropped][1]
+        #         index_former_former_cropped = min(list_len - 1, max(0, self.index_position - index - 2))
+        #         if index_former_former_cropped < index_former_cropped:
+        #             boundary_former_former = self.data_list[index_former_former_cropped][1]
+        #             boundary_former_former = transform(boundary_former_former)
+        #             boundary_former_merged, merge_points_former = merge_polynomial(boundary_former_former, boundary, ref_function)
+        #             points_drawing, = self.ax.plot(merge_points_former[0], merge_points_former[1], 'go')
+        #             self.merged_points_list.append(points_drawing)
+        #             boundary_former = boundary_former_merged
+        #         else:
+        #             boundary_former = transform(boundary_former)
+        #         boundary_merged, merge_points = merge_polynomial(boundary_former, boundary, ref_function)
+        #         line_drawed_merged = boundary_merged.draw_polynomial(self.ax, boundarycolor=(0.,0.,1.,1.0 / (2*index+1)))
+        #         self.merged_cache.append(line_drawed_merged)
 
             
         current_index = min(list_len - 1, max(0, self.index_position))
@@ -316,7 +346,7 @@ def draw_comparing_polynomial_adapting():
 
     set_axs_properties(axs)
     plt.show()
-    
+
 def parse_csv(file_path):
     # TODO
     data_list = []
