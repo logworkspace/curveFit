@@ -4,18 +4,18 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
 
-def sigmoid_approximation(x):
-    if x <= 4 and x >= 0:
-        return 1-0.5*(1-0.25*x)*(1-0.25*x)
-    elif x >= -4 and x < 0:
-        return 0.5*(1+0.25*x)*(1+0.25*x)
-    elif x > 4:
+def sigmoid_approximation(x, shift_position = 20, scale = 0.1):
+    if  scale * (x - shift_position) <= 4 and  scale * (x - shift_position) >= 0:
+        return 1-0.5*(1-0.25* scale * (x - shift_position))*(1-0.25* scale * (x - shift_position))
+    elif  scale * (x - shift_position) >= -4 and  scale * (x - shift_position) < 0:
+        return 0.5*(1+0.25* scale * (x - shift_position))*(1+0.25* scale * (x - shift_position))
+    elif  scale * (x - shift_position) > 4:
         return 1
     else:
         return 0
 
 def error(x):
-    return main.ref_function(x, shift_position=0, scale=1) - sigmoid_approximation(x)
+    return main.ref_function(x, shift_position=0, scale=1) - sigmoid_approximation(x, shift_position=0, scale=1)
 
 def draw_function():
     # draw the error of the sigmoid and its approximation segmented second order nonlinear function
